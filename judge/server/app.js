@@ -48,8 +48,13 @@ app.post('/api/problem/:id/', function(req, res, next) {
         solution.stdout.on('data', (data) => {
             output = output.concat(data);
         });
+<<<<<<< Updated upstream
         solution.stderr.on('data', (data) => {
             solution.kill('SIGHUP');
+=======
+        ls.stderr.on('data', (data) => {
+            kill('SIGHUP');
+>>>>>>> Stashed changes
         });
         if(output === tests[test].output){
           results.push('t');
