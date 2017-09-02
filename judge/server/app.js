@@ -1,5 +1,5 @@
 const bodyParser = require('body-parser');
-const cp = require('child_process');
+const { spawn } = require('child_process');
 const db = require('monk')('mongodb://localhost:27017/judge');
 const uid = require('uuid');
 var app = require('express')();
@@ -31,39 +31,42 @@ app.post('/api/problems/', function(req, res, next) {
 });
 
 app.post('/api/problem/:id/', function(req, res, next) {
-  console.log(req.body);
-  res.sendStatus(200);
-  return;
   db.get('problems').find({'id' : req.params.id}, '-_id').then(items =>{
-    if(items.length > 0)
+    if(items.length === 1)
     {
-      compiler = cp.spawn('g++', ['-x'], { stdio: ['pipe', 'pipe', null]});
-      compiler.stdin = req.body.code;
+      compiler = spawn("g++", ["-x", "c++", "-"], { stdio: ['pipe', 'pipe', 'pipe']});
+      compiler.stdin.write(req.body.code);
+      compiler.stdin.end();
+      let tests = items[0].tests;
       let results = [];
-      for(test in items.tests)
+      for(test in tests)
       {
         let output = "";
-        solution = cp.spawn('a.out', ['-x'], { stdio: ['pipe', 'pipe', null]});
-        solution.stdin = items.tests[test].input;
+        solution = spawn('./a.out', { stdio: ['pipe', 'pipe', 'pipe']});
+        solution.stdin.write(tests[test].input);
+        solution.stdin.end();
         solution.stdout.on('data', (data) => {
             output = output.concat(data);
         });
-        ls.stderr.on('data', (data) => {
-            results.push('f');
-            kill('SIGHUP');
-            continue
+        solution.stderr.on('data', (data) => {
+            solution.kill('SIGHUP');
         });
-        if(output === item.tests[test].output)
-        {
+        if(output === tests[test].output){
           results.push('t');
-        }
-        else{
+        }else{
           results.push('f');
         }
       }
+      let problem = items[0];
+      let newSolutions = problem.solutions;
+      newSolutions.push({'author' : req.body.author, 'results' : results});
+      problem.solutions = newSolutions;
+      db.get("problems").update({id : items[0].id}, problem).catch((e) => {
+           console.log("rejected promise when updating");
+          });
       res.sendStatus(200);
     }
-  }
-}););
+  })
+});
 
 app.listen(3000);
